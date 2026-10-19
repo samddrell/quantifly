@@ -9,7 +9,8 @@ import click
 import numpy as np
 
 from .io import find_pairs, load_image
-from .core import TrainParams, train as _train, evaluate as _evaluate, predict_image
+from .core import (TrainParams, train as _train, evaluate as _evaluate, predict_image,
+                   MODEL_VERSION)
 
 
 def _parse_channels(spec: str) -> tuple:
@@ -18,7 +19,12 @@ def _parse_channels(spec: str) -> tuple:
 
 def _load_model(path) -> dict:
     with open(path, "rb") as fh:
-        return pickle.load(fh)
+        model = pickle.load(fh)
+    if model.get("version") != MODEL_VERSION:
+        raise click.ClickException(
+            f"Model format version {model.get('version')} != expected {MODEL_VERSION}; "
+            f"please retrain with this version of quantifly.")
+    return model
 
 
 @click.group()
@@ -33,7 +39,10 @@ def main():
 @click.option("--out", required=True, type=click.Path(dir_okay=False),
               help="Output model.pkl path.")
 @click.option("--feature", "feature_type", default="fine",
-              type=click.Choice(["basic", "fine", "fineSpatial"]), show_default=True)
+              type=click.Choice(["basic", "fine"]), show_default=True)
+# NOTE: "fineSpatial" exists in features.py but is intentionally not exposed here — its
+# image-index/absolute-position channels only generalize under a fixed capture geometry
+# (see REVISION-01 and the fineSpatial discussion). Kept in code for a future fixed-rig variant.
 @click.option("--scale", "feature_scale", default=0.8, show_default=True, type=float)
 @click.option("--sigma", default=1.0, show_default=True, type=float,
               help="Gaussian sigma for the density map.")

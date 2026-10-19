@@ -10,14 +10,11 @@ Key fixes vs. the original (see PROPOSED-CHANGES.md §8):
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 from scipy.ndimage import label, center_of_mass
-
-DOTS_SUFFIXES = ("_dots", "dots")  # name_dots.png  and  NNNdots.png
 
 
 def load_image(path) -> np.ndarray:
@@ -54,44 +51,44 @@ def build_density(points, shape, sigma: float) -> np.ndarray:
     dots_im = np.zeros(shape[:2], dtype=np.float32)
     for (r, c) in points:
         if 0 <= r < shape[0] and 0 <= c < shape[1]:
-            dots_im[r, c] = 255.0
+            dots_im[r, c] += 255.0  # accumulate: two eggs rounding to one pixel still count twice
     return gaussian_filter(dots_im, float(sigma))
-
-
-def _strip_dots(stem: str) -> str | None:
-    """Map a dots-file stem to its image stem, or None if it isn't a dots file."""
-    if stem.endswith("_dots"):
-        return stem[:-5]
-    m = re.fullmatch(r"(.*?)dots", stem)  # e.g. 001dots -> 001  (paired with 001cell)
-    if m:
-        return m.group(1)
-    return None
 
 
 def find_pairs(image_dir, require_dots: bool = True):
     """Find (image_path, dots_path_or_None) pairs in a directory.
 
-    Supports two conventions:
-      - name.png  +  name_dots.png
-      - NNNcell.png + NNNdots.png   (the published datasets)
+    Supports two conventions (case-insensitive):
+      - name.png     +  name_dots.png
+      - NNNcell.png  +  NNNdots.png   (the published datasets)
+
+    A ``*dots`` file is treated as an annotation only when its matching base image
+    exists, so an ordinary image whose name happens to end in "dots" is not dropped.
     """
     image_dir = Path(image_dir)
     pngs = {p.stem: p for p in image_dir.glob("*.png")}
+    by_lower = {s.lower(): s for s in pngs}  # case-insensitive stem lookup
+
+    def get(name):
+        actual = by_lower.get(name.lower())
+        return pngs[actual] if actual is not None else None
+
+    def is_dots(stem: str) -> bool:
+        sl = stem.lower()
+        if sl.endswith("_dots"):
+            return True
+        if sl.endswith("dots"):
+            return get(stem[:-4] + "cell") is not None  # NNNdots is dots iff NNNcell exists
+        return False
+
     pairs = []
-    used_dots = set()
-    for stem, path in sorted(pngs.items()):
-        if _strip_dots(stem) is not None and stem != _strip_dots(stem):
-            continue  # this is a dots file, skip as a primary image
-        dots = None
-        # name_dots.png
-        if f"{stem}_dots" in pngs:
-            dots = pngs[f"{stem}_dots"]
-        # NNNcell.png -> NNNdots.png
-        elif stem.endswith("cell") and f"{stem[:-4]}dots" in pngs:
-            dots = pngs[f"{stem[:-4]}dots"]
-        if dots is not None:
-            used_dots.add(dots.stem)
+    for stem in sorted(pngs):
+        if is_dots(stem):
+            continue
+        dots = get(stem + "_dots")
+        if dots is None and stem.lower().endswith("cell"):
+            dots = get(stem[:-4] + "dots")
         if require_dots and dots is None:
             continue
-        pairs.append((path, dots))
+        pairs.append((pngs[stem], dots))
     return pairs

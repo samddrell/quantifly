@@ -204,7 +204,9 @@ splits + `--sweep`).
 - Datasets (~16 MB zipped total) are **not** committed here — download script or a
   gitignored `data/` folder?
 - Bias correction / CI: report raw or corrected counts? (see §8).
-- Expose `fineSpatial` at all? (has the meshgrid bug; not the default).
+- `fineSpatial`: **removed from the CLI** — its image-index/absolute-position channels are
+  leaky and need a fixed capture geometry; the meshgrid bug is fixed but the mode doesn't
+  generalize to handheld photos. Code kept in `features.py` for a future fixed-rig variant.
 
 ## 8. Correctness blockers (from review) — STATUS
 

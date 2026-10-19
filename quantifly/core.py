@@ -42,10 +42,18 @@ def _resolve_channels(image: np.ndarray, channels):
 def extract_training_data(pairs, p: TrainParams):
     rng = np.random.default_rng(p.seed)
     X_parts, y_parts = [], []
-    for img_path, dots_path in pairs:
+    n_feat = None
+    for im_num, (img_path, dots_path) in enumerate(pairs):
         image = load_image(img_path).astype(np.float32)
         chans = _resolve_channels(image, p.channels)
-        feats = stack_channels(image, chans, p.feature_scale, p.feature_type)
+        feats = stack_channels(image, chans, p.feature_scale, p.feature_type, im_num)
+        if n_feat is None:
+            n_feat = feats.shape[-1]
+        elif feats.shape[-1] != n_feat:
+            raise ValueError(
+                f"Inconsistent feature count: {img_path.name} yields {feats.shape[-1]} "
+                f"features vs {n_feat} from earlier images — mixed grayscale/RGB in one "
+                f"training set is not supported.")
         pts, _ = dots_to_points(load_image(dots_path))
         dens = build_density(pts, image.shape, p.sigma)
         h, w = dens.shape
@@ -86,8 +94,14 @@ def predict_image(image: np.ndarray, model: dict):
     """Return (density_map, predicted_count)."""
     image = image.astype(np.float32)
     chans = _resolve_channels(image, model["channels"])
+    # im_num defaults to 0 at predict time: fineSpatial's image-index channel is only
+    # meaningful within a training set, so that mode does not generalize to new images.
     feats = stack_channels(image, chans, model["feature_scale"], model["feature_type"])
     h, w, c = feats.shape
+    if c != model["n_features"]:
+        raise ValueError(
+            f"Feature count {c} does not match the model's {model['n_features']} "
+            f"(image channel count differs from training, or wrong model file).")
     pred = model["rf"].predict(feats.reshape(h * w, c)).reshape(h, w)
     pred = np.clip(pred, 0, None)  # density is non-negative
     return pred, float(pred.sum() / 255.0)
