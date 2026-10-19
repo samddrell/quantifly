@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtualenv
+.venv/
+venv/
+
+# Feature caches (large; opt-in only)
+*.p
+
+# Models and outputs
+*.pkl
+*.csv
+density_maps/
+
+# Datasets (downloaded separately; ~16 MB on the GitHub release)
+data/
+
+# OS cruft
+.DS_Store
+Thumbs.db

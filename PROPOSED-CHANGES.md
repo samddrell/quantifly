@@ -193,10 +193,12 @@ datasets' `NNNcell.png` / `NNNdots.png`. No `image,x,y` CSV — you never record
 - README update — new install + CLI usage (legacy README kept or moved).
 - Remove `environment.yml` (superseded by `requirements.txt`).
 
-## 6. Validation plan
-Run `evaluate` against `data04-20140331-DM` (8 image/dot pairs) and report MAE / % error as
-the first real accuracy anchor. **Blocked on §8.1 and §8.2** (the input-dtype resolution) —
-until those are settled the accuracy numbers are meaningless.
+## 6. Validation plan — DONE (first anchor)
+Ran `evaluate` against `data04-20140331-DM` (8 pairs). Held-out (train on 6, test on 2):
+**~1–3% error, MAE ≈ 1.5 eggs**. Full-set fit (train/eval on all 8): **MAE ≈ 7.9**, with a
+systematic **over-prediction** that the deferred linear bias-correction (§8 decision) targets.
+Confirms the port is numerically sound. Rigorous accuracy + tuning is the next phase (proper
+splits + `--sweep`).
 
 ## 7. Open questions / decisions pending
 - Datasets (~16 MB zipped total) are **not** committed here — download script or a
@@ -204,7 +206,18 @@ until those are settled the accuracy numbers are meaningless.
 - Bias correction / CI: report raw or corrected counts? (see §8).
 - Expose `fineSpatial` at all? (has the meshgrid bug; not the default).
 
-## 8. Correctness blockers to clear BEFORE implementation (from review)
+## 8. Correctness blockers (from review) — STATUS
+
+**Resolved in the initial port** (`quantifly/` package): #1 confirmed a bug and the `*255`
+dropped (cell.png is ordinary 8-bit, values 0–131); #2 standardized on Pillow at native
+dtype; #3 blob-count GT reproduces the published single-pixel dots (17=17) and handles brush
+dots; #4 structure-tensor mapped with inner-scale pre-smoothing, validated by accuracy; #5
+grayscale guard in `_resolve_channels`; #6 `random_state`/`--seed` wired through; #7 cleanup
+(`list(range)`, model schema, grayscale) done. **Still open decisions:** linear bias
+correction / CI (`M`/`c`, hardcoded `t`) — deferred, raw counts reported for now; whether to
+excise or repair the original `p_size>1` patch path (currently not ported); dataset storage.
+
+Original blocker list, for reference:
 1. **Input dtype / `*255` overflow.** `np.array(PIL.Image.open(png)) * 255` (L294, L615,
    L720) overflows `uint8` mod 256 for ordinary 8-bit PNGs (e.g. 10→246) → garbage features.
    This is not a Py2/Py3 issue; it "works" only if the `cell.png` inputs are effectively
